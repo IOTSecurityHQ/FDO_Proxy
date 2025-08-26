@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # FDO Go Server Backend
+  fdo-go-server:
+    image: fidoalliance/go-fdo:latest
+    container_name: fdo-go-server
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/app/data
+    command: >
+      -http localhost:8081
+      -db /app/data/fdo-backend.db
+      -debug
+    restart: unless-stopped
+    networks:
+      - fdo-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # FDO Server Proxy
+  fdo-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fdo-proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./logs:/app/logs
+    environment:
+      - FDO_PATH=/app/fdo-backend
+    depends_on:
+      fdo-go-server:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - fdo-network
+    command: >
+      -listen :8080
+      -fdo-path /app/fdo-backend
+      -debug
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  fdo-network:
+    driver: bridge
+
+volumes:
+  fdo-data: 
